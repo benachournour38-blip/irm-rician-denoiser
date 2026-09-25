@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRM Rician Denoiser</title>
+  
+  <!-- Medical Favicon & Logo -->
+  <link rel="icon" type="image/svg+xml" href="/static/assets/favicon.svg">
+  <link rel="alternate icon" href="/static/assets/favicon.svg">
+  <link rel="apple-touch-icon" href="/static/assets/favicon.svg">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/static/css/style.css?v=1.1.4">
+</head>
+<body>
+
+  <!-- ====================================================================
+       PORTAIL D'ACCÈS SÉCURISÉ (LOGIN OVERLAY)
+       ==================================================================== -->
+  <div id="login-portal" class="login-portal-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo-wrapper">
+          <img src="/static/assets/logo.svg" alt="Rachis Spinal" width="54" height="105" style="display: block; margin: 0 auto;">
+        </div>
+        <h1 class="login-title">IRM Rician Denoiser</h1>
+      </div>
+
+      <form id="login-form" class="login-form">
+        <div class="login-field">
+          <label for="login-password">Mot de passe</label>
+          <div class="login-input-group">
+            <input type="password" id="login-password" placeholder="Entrez votre mot de passe" required autocomplete="current-password">
+            <button type="button" id="btn-toggle-pwd" class="btn-pwd-eye" title="Afficher/Masquer le mot de passe">
+              <svg class="icon-eye-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+              <svg class="icon-eye-open" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="login-error-msg" class="login-error" style="display: none;"></div>
+
+        <button type="submit" id="btn-submit-login" class="btn btn-primary login-btn">
+          <span>Connexion</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-container">
+    
+    <!-- ====================================================================
+         HEADER
+         ==================================================================== -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo" style="background: none; padding: 0;">
+          <img src="/static/assets/logo.svg" alt="Logo IRM" width="18" height="34" style="display: block; filter: drop-shadow(0 0 4px rgba(13,148,136,0.5));">
+        </div>
+        <div class="brand-title">
+          <span class="brand-name">IRM Rician Denoiser</span>
+          <span class="brand-sub">Medical DICOM Viewer</span>
+        </div>
+      </div>
+
+      <!-- Current Selected Context -->
+      <div class="header-context-pills">
+        <div class="context-pill">
+          <span class="context-label">Patient:</span>
+          <span class="context-val" id="header-patient-name">DUPONT Jean (LUMBAR-001)</span>
+        </div>
+        <span style="color: var(--border-medium);">|</span>
+        <div class="context-pill">
+          <span class="context-label">Examen:</span>
+          <span class="context-val" id="header-study-desc">IRM Rachis Lombaire</span>
+        </div>
+        <span style="color: var(--border-medium);">|</span>
+        <div class="context-pill">
+          <span class="context-label">Série:</span>
+          <span class="context-val" id="header-series-desc" style="color: var(--accent-hover);">T2 TSE Sagittal</span>
+        </div>
+        <button class="btn btn-sm" id="btn-close-exam" title="Fermer l'examen en cours et libérer le visualiseur" style="display: none; background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 4px; gap: 4px; align-items: center; margin-left: 6px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <span>✕ Fermer l'examen</span>
+        </button>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <!-- User Badge -->
+        <div id="user-badge" style="display: flex; align-items: center; gap: 6px; background: rgba(14,165,233,0.1); border: 1px solid rgba(14,165,233,0.3); padding: 4px 10px; border-radius: 4px; font-size: 11px; color: var(--accent-hover);">
+          <span>👤</span>
+          <span id="user-name-display" style="font-weight: 600;">Dr. Radiologue</span>
+        </div>
+
+        <button class="btn btn-sm" id="btn-logout" title="Verrouiller la session" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+          <span>🔒 Déconnexion</span>
+        </button>
+
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer;">
+          <input type="checkbox" id="toggle-anonymize">
+          <span>Anonymiser</span>
+        </label>
+        
+        <button class="btn" id="btn-export-denoised" title="Télécharger la série débruitée complète au format standard DICOM" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.4);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>📥 Exporter DICOM Débruité</span>
+        </button>
+        
+        <button class="btn btn-icon" id="btn-open-shortcuts" title="Raccourcis Clavier (?)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ====================================================================
+         MAIN WORKSPACE (3 COLUMNS)
+         ==================================================================== -->
+    <div class="main-workspace">
+      
+      <!-- COLUMN 1: PATIENTS / EXAMENS / SERIES -->
+      <aside class="sidebar-left" id="sidebar-left">
+        <div class="sidebar-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div class="search-box" style="flex: 1;">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="patient-search-input" class="search-input" placeholder="Rechercher un patient...">
+          </div>
+          <button class="btn btn-sm btn-icon" id="btn-collapse-sidebar-left" title="Masquer le volet patients [B]" style="padding: 2px 6px; flex-shrink: 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+        </div>
+
+        <div class="sidebar-content" id="patient-list-container">
+          <!-- Populated by JavaScript -->
+          <div class="empty-state">
+            <div class="spinner"></div>
+            <p>Chargement des patients...</p>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="btn btn-sm" id="btn-open-upload-sidebar" style="width: 100%;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Ajouter des fichiers DICOM</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- COLUMN 2: CENTER MEDICAL VIEWER -->
+      <main class="center-viewport-container">
+        
+        <!-- Viewport Toolbar -->
+        <div class="viewport-toolbar">
+          <!-- Left Panel Toggle (Patients) -->
+          <button class="btn btn-sm active" id="btn-toggle-patients-toolbar" title="Afficher / Masquer le volet Patients [B]">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <span>Patients</span>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- View Modes -->
+          <div class="toolbar-group">
+            <button class="btn btn-sm active" data-view-mode="original" title="Image DICOM Originale">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              <span>Original</span>
+            </button>
+            <button class="btn btn-sm" data-view-mode="denoised" title="Résultat Débruité (Futur IA)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+              <span>Débruité (IA)</span>
+            </button>
+            <button class="btn btn-sm" data-view-mode="compare_split" title="Comparaison Côte-à-Côte">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+              <span>Côte-à-Côte</span>
+            </button>
+            <button class="btn btn-sm" data-view-mode="curtain" title="Curseur Scindé (Split Curtain)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 3v18M14 12l-2-2-2 2M14 12l-2 2-2-2"/></svg>
+              <span>Curseur Scindé</span>
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Sync Toggle -->
+          <button class="btn btn-sm active" id="btn-sync-viewers" title="Synchroniser la navigation, le zoom et le contraste des deux panneaux">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span>✓ Synchronisé</span>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Tools -->
+          <div class="toolbar-group">
+            <button class="btn btn-sm active" data-tool="wl" title="Ajuster Window / Level (Contraste / Luminosité) [W]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20Z"/></svg>
+              <span>W/L</span>
+            </button>
+
+            <!-- Presets Dropdown -->
+            <select id="preset-select" class="btn btn-sm" style="padding: 4px 6px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); outline: none;">
+              <option value="default">Défaut DICOM</option>
+              <option value="lumbar_t2">Rachis T2 (W:700 C:350)</option>
+              <option value="lumbar_t1">Rachis T1 (W:500 C:220)</option>
+              <option value="stir">STIR / Œdème (W:600 C:280)</option>
+              <option value="bone">Contraste Os (W:1200 C:400)</option>
+              <option value="soft">Tissus Mous (W:400 C:150)</option>
+            </select>
+
+            <button class="btn btn-sm" data-tool="scroll" title="Balayer / Défiler les coupes avec le curseur de souris [S ou Shift+Glisser]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="5" rx="1"/><rect x="4" y="9.5" width="16" height="5" rx="1"/><rect x="4" y="17" width="16" height="5" rx="1"/></svg>
+              <span>Balayer</span>
+            </button>
+
+            <button class="btn btn-sm" data-tool="pan" title="Déplacer / Pan [P]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+              <span>Pan</span>
+            </button>
+
+            <button class="btn btn-sm" data-tool="zoom" title="Zoomer [Z]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg>
+              <span>Zoom</span>
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Actions -->
+          <div class="toolbar-group">
+            <button class="btn btn-sm btn-icon" id="btn-zoom-in" title="Zoom +">+</button>
+            <button class="btn btn-sm btn-icon" id="btn-zoom-out" title="Zoom -">-</button>
+            <button class="btn btn-sm" id="btn-fit" title="Ajuster à l'écran">Fit</button>
+            <button class="btn btn-sm" id="btn-invert" title="Inverser les niveaux de gris [I]">Invert</button>
+            <button class="btn btn-sm" id="btn-reset" title="Réinitialiser vue et contraste [R]">Reset</button>
+            <button class="btn btn-sm btn-icon" id="btn-fullscreen" title="Plein Écran [F]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            </button>
+            <div class="toolbar-divider"></div>
+            <button class="btn btn-sm active" id="btn-toggle-meta-toolbar" title="Afficher / Masquer le panneau d'Informations DICOM [M]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+              <span>Infos DICOM</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Viewport Stage -->
+        <div class="viewport-stage" id="viewport-stage">
+          
+          <!-- Standby Empty Viewport Placeholder -->
+          <div id="viewport-empty-placeholder" class="viewport-empty-placeholder" style="display: none;">
+            <div class="empty-placeholder-card">
+              <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(13,148,136,0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);"><rect width="18" height="18" x="3" y="3" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+              </div>
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Aucun examen en cours</h3>
+              <p style="font-size: 12.5px; color: var(--text-secondary); max-width: 340px; line-height: 1.5; margin-bottom: 18px;">
+                Sélectionnez un patient ou une série dans le volet de gauche, ou téléversez un nouveau fichier DICOM.
+              </p>
+              <button class="btn btn-sm btn-primary" id="btn-empty-upload">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Ajouter des fichiers DICOM</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- DUAL / SINGLE VIEWPORTS WRAPPER -->
+          <div class="viewports-wrapper" id="viewports-wrapper">
+            
+            <!-- ORIGINAL DICOM VIEWPORT -->
+            <div class="viewport-panel" id="viewport-panel-original">
+              <span class="viewport-badge-tag badge-original">ORIGINAL DICOM</span>
+              
+              <!-- HUD Overlays -->
+              <div class="viewport-hud hud-top-left"></div>
+              <div class="viewport-hud hud-top-right"></div>
+              <div class="viewport-hud hud-bottom-left"></div>
+              <div class="viewport-hud hud-bottom-right"></div>
+
+              <canvas id="canvas-original" class="viewport-canvas"></canvas>
+            </div>
+
+            <!-- DENOISED / AI VIEWPORT -->
+            <div class="viewport-panel" id="viewport-panel-ai" style="display: none;">
+              <span class="viewport-badge-tag badge-ai">✦ DÉBRUITÉ IA (ResNet 2D - CUDA)</span>
+
+              <!-- HUD Overlays for AI Viewport -->
+              <div class="viewport-hud hud-top-left"></div>
+              <div class="viewport-hud hud-top-right hud-ai-top-right"></div>
+              <div class="viewport-hud hud-bottom-left hud-ai-bottom-left"></div>
+              <div class="viewport-hud hud-bottom-right"></div>
+
+              <canvas id="canvas-ai" class="viewport-canvas"></canvas>
+            </div>
+
+          </div>
+
+          <!-- SPLIT CURTAIN COMPARISON CONTAINER -->
+          <div class="curtain-container" id="curtain-container" style="display: none;">
+            
+            <!-- Bottom Layer (Denoised AI Image) -->
+            <div class="curtain-layer curtain-bottom">
+              <span class="viewport-badge-tag badge-ai" style="top: 12px; right: 24px; left: auto; transform: none;">✦ Débruité (ResNet 2D)</span>
+              <canvas id="canvas-curtain-denoised" class="viewport-canvas"></canvas>
+            </div>
+
+            <!-- Top Layer (Original DICOM Image) -->
+            <div class="curtain-layer curtain-top" id="curtain-top-layer">
+              <span class="viewport-badge-tag badge-original" style="top: 12px; left: 24px; transform: none;">Original DICOM</span>
+              <canvas id="canvas-curtain-orig" class="viewport-canvas"></canvas>
+            </div>
+
+            <!-- Draggable Divider Handle -->
+            <div class="curtain-handle" id="curtain-handle">
+              <div class="curtain-handle-knob">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 8 4 4-4 4M6 8l-4 4 4 4"/></svg>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Floating Expand Tabs when sidebars are collapsed -->
+          <button id="btn-expand-sidebar-left" class="sidebar-expand-tab sidebar-expand-tab-left" title="Afficher les Patients [B]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <span>Patients</span>
+          </button>
+
+          <button id="btn-expand-sidebar-right" class="sidebar-expand-tab" title="Afficher les Informations DICOM [M]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>Infos DICOM</span>
+          </button>
+
+        </div>
+
+        <!-- Viewport Footer Navigation (Slices) -->
+        <div class="viewport-footer-nav">
+          <div class="slice-counter-display">
+            <span id="slice-display">Coupe 8 / 15</span>
+            <span id="slice-location-display" style="color: var(--text-muted); font-size: 11px;">Pos: -12.0 mm</span>
+          </div>
+
+          <div class="slice-slider-container">
+            <button class="btn btn-sm btn-icon" id="btn-prev-slice" title="Coupe précédente [←]">◀</button>
+            <input type="range" id="slice-slider" class="slice-slider" min="0" max="14" value="7">
+            <button class="btn btn-sm btn-icon" id="btn-next-slice" title="Coupe suivante [→]">▶</button>
+          </div>
+
+          <div class="cine-controls">
+            <button class="btn btn-sm" id="btn-cine-play" title="Lecture en boucle Cine [Espace]">
+              ▶ Cine
+            </button>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- COLUMN 3: DICOM METADATA -->
+      <aside class="sidebar-right" id="sidebar-right">
+        <div class="sidebar-header" style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-primary);">
+            INFORMATIONS DICOM
+          </span>
+          <button class="btn btn-sm btn-icon" id="btn-collapse-sidebar-right" title="Masquer le panneau [M]" style="padding: 2px 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
+        <div class="metadata-content" id="metadata-content">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="btn btn-sm" id="btn-all-metadata" style="width: 100%;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Voir toutes les métadonnées</span>
+          </button>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 1: DICOM IMPORT
+       ==================================================================== -->
+  <div class="modal-backdrop" id="upload-modal">
+    <div class="modal-dialog modal-md">
+      <div class="modal-header">
+        <h3 class="modal-title">Importer une étude DICOM</h3>
+        <button class="btn btn-sm btn-icon" id="btn-close-upload">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="upload-dropzone" id="upload-dropzone">
+          <div class="dropzone-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </div>
+          <div>
+            <strong style="font-size: 14px; color: var(--text-primary);">Glissez et déposez vos fichiers DICOM ici</strong>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Fichiers .dcm, dossiers d'examen ou archives ZIP</p>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button class="btn btn-sm" id="btn-select-files">Sélectionner des fichiers</button>
+            <button class="btn btn-sm" id="btn-select-folder">Sélectionner un dossier</button>
+          </div>
+        </div>
+
+        <input type="file" id="file-input" multiple accept=".dcm,.dicom,.ima,.zip" style="display: none;">
+        <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+
+        <div id="upload-progress" style="display: none; margin-top: 14px;">
+          <div class="progress-container">
+            <div class="progress-fill" id="upload-progress-fill"></div>
+          </div>
+          <div id="upload-status-text" style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; text-align: center;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 2: FULL METADATA DICTIONARY
+       ==================================================================== -->
+  <div class="modal-backdrop" id="metadata-modal">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Dictionnaire des Métadonnées DICOM</h3>
+        <button class="btn btn-sm btn-icon" id="btn-close-metadata">✕</button>
+      </div>
+      <div style="padding: 10px 18px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-card);">
+        <input type="text" id="tag-search-input" class="search-input" placeholder="Filtrer les tags (ex: 0028, RepetitionTime, PixelSpacing)...">
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <table class="dicom-tags-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">Tag</th>
+              <th style="width: 50px;">VR</th>
+              <th style="width: 220px;">Nom DICOM</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody id="metadata-tags-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 3: KEYBOARD SHORTCUTS
+       ==================================================================== -->
+  <div class="modal-backdrop" id="shortcuts-modal">
+    <div class="modal-dialog modal-md">
+      <div class="modal-header">
+        <h3 class="modal-title">Raccourcis Clavier Radiologie</h3>
+        <button class="btn btn-sm btn-icon" id="btn-close-shortcuts">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Parcourir les coupes</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">Flèches Haut / Bas ou Gauche / Droite (ou Molette)</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Outil Contraste / Window-Level</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">W (ou Clic Droit + Glisser)</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Outil Déplacement / Pan</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">P</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Outil Zoom</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">Z (ou Ctrl + Molette)</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Inverser niveaux de gris</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">I</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Réinitialiser vue / contraste</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">R</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-subtle);">
+            <span style="color: var(--text-secondary);">Lecture Cine automatique</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">Espace</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0;">
+            <span style="color: var(--text-secondary);">Plein Écran</span>
+            <kbd style="font-family: var(--font-mono); background: var(--bg-card); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border-medium);">F</kbd>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 4: AI DENOISING INFO
+       ==================================================================== -->
+  <div class="modal-backdrop" id="ai-info-modal">
+    <div class="modal-dialog modal-md">
+      <div class="modal-header">
+        <h3 class="modal-title">Statut du Module de Débruitage IA</h3>
+        <button class="btn btn-sm btn-icon" id="btn-close-ai-info">✕</button>
+      </div>
+      <div class="modal-body" id="ai-status-detail-container">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script type="module" src="/static/js/app.js?v=1.1.4"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+
+# Binaries and tools not needed on Linux/Cloud
+bin/
+*.exe
+*.zip
+
+# Logs
+*.log
+storage/*.log
+storage/PUBLIC_LINK.txt
+
+# Temp uploads
+storage/temp_uploads/*
+!storage/temp_uploads/.gitkeep
