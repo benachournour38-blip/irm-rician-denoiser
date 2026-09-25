@@ -77,23 +77,16 @@ class DenoisingService:
     _device: Optional[torch.device] = None
     _checkpoint_loaded: Optional[str] = None
     _cache: Dict[str, bytes] = {}  # Cache mémoire des images PNG rendues
-    _denoised_array_cache: Dict[str, np.ndarray] = {}  # Cache des matrices débruitées pour calcul immédiat
 
     @classmethod
     def get_device(cls) -> torch.device:
         if cls._device is None:
-            if torch.cuda.is_available() and torch.cuda.device_count() > 0:
-                try:
-                    cls._device = torch.device("cuda")
-                    print(f"[CUDA] Inférence GPU active : {torch.cuda.get_device_name(0)}")
-                except Exception:
-                    torch.set_num_threads(2)
-                    cls._device = torch.device("cpu")
-                    print("[CPU] Inférence CPU active (fallback).")
+            if torch.cuda.is_available():
+                cls._device = torch.device("cuda")
+                print(f"[CUDA] Inférence GPU active : {torch.cuda.get_device_name(0)}")
             else:
-                torch.set_num_threads(2)
                 cls._device = torch.device("cpu")
-                print("[CPU] Inférence CPU active (2 threads).")
+                print("[CPU] Inférence CPU active.")
         return cls._device
 
     @classmethod
@@ -149,9 +142,8 @@ class DenoisingService:
     @classmethod
     def denoise_pixel_array(cls, pixel_array: np.ndarray) -> np.ndarray:
         """
-        Applique le débruitage par inférence GPU/CPU sur la matrice 2D à résolution native.
-        Fidélité 100% stricte et absolue au notebook de recherche Version-02 (best_model_fold_2.pth).
-        Préservation intégrale des fréquences spatiales du bruit ricien sans aucun sous-échantillonnage.
+        Applique le débruitage par inférence GPU CUDA sur une matrice 2D.
+        Utilise la normalisation consistante issue de l'entraînement.
         """
         model = cls.get_model()
         device = cls.get_device()
@@ -162,13 +154,13 @@ class DenoisingService:
         if max_val <= 0:
             return pixel_array.copy()
 
-        # 1. Normalisation cohérente [0.0, 1.0] (Candidate 3 du notebook de recherche)
+        # 1. Normalisation [0.0, 1.0]
         norm_img = np.clip(pixel_array.astype(np.float32) / max_val, 0.0, 1.0)
 
         # 2. Conversion en tenseur PyTorch (1, 1, H, W)
         tensor_in = torch.from_numpy(norm_img).float().unsqueeze(0).unsqueeze(0).to(device)
 
-        # 3. Inférence directe sur la matrice native (Réseau Fully-Convolutional 2D)
+        # 3. Inférence GPU avec torch.no_grad()
         with torch.no_grad():
             pred_norm = model(tensor_in)
             pred_norm = torch.clamp(pred_norm, 0.0, 1.0)
@@ -186,7 +178,7 @@ class DenoisingService:
         invert: bool = False
     ) -> bytes:
         """
-        Lit le fichier DICOM, applique l'inférence de débruitage ResNet sur GPU/CPU,
+        Lit le fichier DICOM, applique l'inférence de débruitage ResNet sur GPU,
         applique le fenêtrage Window/Level et génère le flux PNG optimisé.
         """
         cache_key = f"{file_path}_wc{custom_wc}_ww{custom_ww}_inv{invert}"
@@ -202,14 +194,8 @@ class DenoisingService:
         if slope != 1.0 or intercept != 0.0:
             raw_pixels = raw_pixels * slope + intercept
 
-        # Inférence IA avec cache du tenseur débruité
-        if file_path in cls._denoised_array_cache:
-            denoised_pixels = cls._denoised_array_cache[file_path]
-        else:
-            denoised_pixels = cls.denoise_pixel_array(raw_pixels)
-            if len(cls._denoised_array_cache) > 40:
-                cls._denoised_array_cache.clear()
-            cls._denoised_array_cache[file_path] = denoised_pixels
+        # Inférence IA de débruitage
+        denoised_pixels = cls.denoise_pixel_array(raw_pixels)
 
         # Photometric Interpretation
         photometric = getattr(ds, "PhotometricInterpretation", "MONOCHROME2")
@@ -251,7 +237,7 @@ class DenoisingService:
 
         img = Image.fromarray(scaled_8bit, mode='L')
         buffer = io.BytesIO()
-        img.save(buffer, format="PNG", optimize=False)
+        img.save(buffer, format="PNG", optimize=True)
         png_bytes = buffer.getvalue()
 
         # Limite taille cache (max 200 images en RAM)
@@ -276,14 +262,7 @@ class DenoisingService:
         if slope != 1.0 or intercept != 0.0:
             raw_pixels = raw_pixels * slope + intercept
 
-        # Utilisation immédiate du cache s'il a déjà été calculé lors de l'affichage
-        if file_path in cls._denoised_array_cache:
-            denoised_pixels = cls._denoised_array_cache[file_path]
-        else:
-            denoised_pixels = cls.denoise_pixel_array(raw_pixels)
-            if len(cls._denoised_array_cache) > 40:
-                cls._denoised_array_cache.clear()
-            cls._denoised_array_cache[file_path] = denoised_pixels
+        denoised_pixels = cls.denoise_pixel_array(raw_pixels)
         elapsed_ms = (time.time() - t0) * 1000.0
 
         max_val = float(max(raw_pixels.max(), denoised_pixels.max(), 1.0))
