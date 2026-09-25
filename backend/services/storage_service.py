@@ -5,12 +5,45 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from backend.config import PATIENTS_STORAGE_DIR, DB_PATH
+from backend.config import PATIENTS_STORAGE_DIR, DB_PATH, BASE_DIR, STORAGE_DIR
 from backend.services.dicom_service import DicomService
 
 class StorageService:
     def __init__(self):
         self.init_db()
+
+    @staticmethod
+    def resolve_file_path(file_path: Optional[str]) -> str:
+        if not file_path:
+            return ""
+        p = Path(file_path)
+        if p.is_file():
+            return str(p.resolve())
+
+        base_cand = (BASE_DIR / file_path).resolve()
+        if base_cand.is_file():
+            return str(base_cand)
+
+        norm_path = file_path.replace("\\", "/")
+        if "storage/patients/" in norm_path:
+            rel = norm_path.split("storage/patients/")[-1]
+            cand = (PATIENTS_STORAGE_DIR / rel).resolve()
+            if cand.is_file():
+                return str(cand)
+
+        if "storage/" in norm_path:
+            rel = norm_path.split("storage/")[-1]
+            cand = (STORAGE_DIR / rel).resolve()
+            if cand.is_file():
+                return str(cand)
+
+        filename = Path(norm_path).name
+        matches = list(PATIENTS_STORAGE_DIR.rglob(filename))
+        if matches:
+            return str(matches[0].resolve())
+
+        return str((BASE_DIR / file_path).resolve())
+
 
     def get_connection(self):
         conn = sqlite3.connect(DB_PATH)
@@ -93,6 +126,15 @@ class StorageService:
                 FOREIGN KEY (series_instance_uid) REFERENCES series (series_instance_uid) ON DELETE CASCADE
             );
             """)
+
+            # Auto-migrate legacy absolute paths to portable relative paths
+            cursor.execute("SELECT id, file_path FROM instances WHERE file_path LIKE 'C:%'")
+            for inst_id, fp in cursor.fetchall():
+                norm = fp.replace("\\", "/")
+                if "storage/patients/" in norm:
+                    rel = "storage/patients/" + norm.split("storage/patients/")[-1]
+                    cursor.execute("UPDATE instances SET file_path = ? WHERE id = ?", (rel, inst_id))
+
             conn.commit()
 
     def index_dicom_file(self, src_file_path: str, move_file: bool = False, is_single_file_test: bool = False, test_name: str = None) -> Dict[str, Any]:
@@ -320,6 +362,8 @@ class StorageService:
                         d["pixel_spacing"] = json.loads(d["pixel_spacing"])
                     except Exception:
                         pass
+                if d.get("file_path"):
+                    d["file_path"] = self.resolve_file_path(d["file_path"])
                 instances.append(d)
             return instances
 
@@ -337,6 +381,8 @@ class StorageService:
                         d[k] = json.loads(d[k])
                     except Exception:
                         pass
+            if d.get("file_path"):
+                d["file_path"] = self.resolve_file_path(d["file_path"])
             return d
 
     def delete_patient(self, patient_id: str) -> bool:
