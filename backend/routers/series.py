@@ -41,6 +41,10 @@ def export_series_denoised_zip(series_uid: str):
             if file_path and os.path.exists(file_path):
                 ds = pydicom.dcmread(file_path, force=True)
                 raw_pixels = ds.pixel_array.astype(np.float32)
+                slope = float(getattr(ds, "RescaleSlope", 1.0) or 1.0)
+                intercept = float(getattr(ds, "RescaleIntercept", 0.0) or 0.0)
+                if slope != 1.0 or intercept != 0.0:
+                    raw_pixels = raw_pixels * slope + intercept
                 denoised_pixels = DenoisingService.denoise_pixel_array(raw_pixels)
                 dcm_bytes = DicomService.create_denoised_dicom_bytes(file_path, denoised_pixels)
                 inst_name = f"DENOISED_{series['series_description'][:20].replace(' ', '_')}_{idx:03d}.dcm"

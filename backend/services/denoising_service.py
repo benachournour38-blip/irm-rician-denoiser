@@ -82,9 +82,14 @@ class DenoisingService:
     @classmethod
     def get_device(cls) -> torch.device:
         if cls._device is None:
-            if torch.cuda.is_available():
-                cls._device = torch.device("cuda")
-                print(f"[CUDA] Inférence GPU active : {torch.cuda.get_device_name(0)}")
+            if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+                try:
+                    cls._device = torch.device("cuda")
+                    print(f"[CUDA] Inférence GPU active : {torch.cuda.get_device_name(0)}")
+                except Exception:
+                    torch.set_num_threads(2)
+                    cls._device = torch.device("cpu")
+                    print("[CPU] Inférence CPU active (fallback).")
             else:
                 torch.set_num_threads(2)
                 cls._device = torch.device("cpu")
@@ -144,8 +149,9 @@ class DenoisingService:
     @classmethod
     def denoise_pixel_array(cls, pixel_array: np.ndarray) -> np.ndarray:
         """
-        Applique le débruitage par inférence GPU CUDA sur une matrice 2D.
-        Utilise la normalisation consistante issue de l'entraînement.
+        Applique le débruitage par inférence GPU/CPU sur la matrice 2D à résolution native.
+        Fidélité 100% stricte et absolue au notebook de recherche Version-02 (best_model_fold_2.pth).
+        Préservation intégrale des fréquences spatiales du bruit ricien sans aucun sous-échantillonnage.
         """
         model = cls.get_model()
         device = cls.get_device()
@@ -156,26 +162,16 @@ class DenoisingService:
         if max_val <= 0:
             return pixel_array.copy()
 
-        # 1. Normalisation [0.0, 1.0]
+        # 1. Normalisation cohérente [0.0, 1.0] (Candidate 3 du notebook de recherche)
         norm_img = np.clip(pixel_array.astype(np.float32) / max_val, 0.0, 1.0)
 
         # 2. Conversion en tenseur PyTorch (1, 1, H, W)
         tensor_in = torch.from_numpy(norm_img).float().unsqueeze(0).unsqueeze(0).to(device)
 
-        orig_h, orig_w = orig_shape
-        needs_resize = (orig_h != 256 or orig_w != 256) and (device.type == "cpu" or orig_h > 256)
-
-        if needs_resize:
-            tensor_feed = torch.nn.functional.interpolate(tensor_in, size=(256, 256), mode='bilinear', align_corners=False)
-        else:
-            tensor_feed = tensor_in
-
-        # 3. Inférence avec torch.no_grad()
+        # 3. Inférence directe sur la matrice native (Réseau Fully-Convolutional 2D)
         with torch.no_grad():
-            pred_norm = model(tensor_feed)
+            pred_norm = model(tensor_in)
             pred_norm = torch.clamp(pred_norm, 0.0, 1.0)
-            if needs_resize:
-                pred_norm = torch.nn.functional.interpolate(pred_norm, size=(orig_h, orig_w), mode='bilinear', align_corners=False)
 
         # 4. Dénormalisation vers l'échelle d'origine
         denoised_array = (pred_norm[0, 0].cpu().numpy() * max_val).astype(np.float32)
