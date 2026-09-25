@@ -297,9 +297,11 @@ export class MedicalViewer {
       return;
     }
 
+    this.loadError = false;
     const img = new Image();
     return new Promise((resolve) => {
       img.onload = () => {
+        this.loadError = false;
         this.imageCache.set(cacheKey, img);
         this.currentImage = img;
         if (!this.hasInitialFit) {
@@ -312,6 +314,8 @@ export class MedicalViewer {
       };
       img.onerror = (e) => {
         console.error('Erreur chargement image DICOM:', url, e);
+        this.loadError = true;
+        this.render();
         resolve();
       };
       img.src = url;
@@ -584,11 +588,17 @@ export class MedicalViewer {
 
       this.ctx.imageSmoothingEnabled = false;
       this.ctx.drawImage(this.currentImage, -iw / 2, -ih / 2, iw, ih);
+    } else if (this.loadError) {
+      this.ctx.fillStyle = '#f87171';
+      this.ctx.font = '13px JetBrains Mono, monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('Erreur de chargement - Cliquez pour réessayer', w / 2, h / 2);
     } else {
       this.ctx.fillStyle = '#94a3b8';
       this.ctx.font = '13px JetBrains Mono, monospace';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText('Chargement de la coupe...', w / 2, h / 2);
+      const msg = this.options.isAiSlot ? 'Débruitage IA en cours...' : 'Chargement de la coupe...';
+      this.ctx.fillText(msg, w / 2, h / 2);
     }
 
     this.ctx.restore();

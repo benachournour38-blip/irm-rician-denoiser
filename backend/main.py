@@ -56,6 +56,14 @@ def on_startup():
         from backend.sample_generator import generate_sample_lumbar_studies
         generate_sample_lumbar_studies()
 
+    try:
+        from backend.services.denoising_service import DenoisingService
+        print("⚡ Préchauffage du modèle IA ResNet 2D...")
+        DenoisingService.get_model()
+        print("✅ Modèle IA ResNet 2D préchauffé et prêt en mémoire.")
+    except Exception as e:
+        print(f"⚠️ Erreur préchauffage IA: {e}")
+
 @app.get("/api/health")
 def health_check():
     return {

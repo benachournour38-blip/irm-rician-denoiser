@@ -133,7 +133,8 @@ class StorageService:
                 norm = fp.replace("\\", "/")
                 if "storage/patients/" in norm:
                     rel = "storage/patients/" + norm.split("storage/patients/")[-1]
-                    cursor.execute("UPDATE instances SET file_path = ? WHERE id = ?", (rel, inst_id))
+            # Clean phantom empty series
+            cursor.execute("DELETE FROM series WHERE series_instance_uid NOT IN (SELECT DISTINCT series_instance_uid FROM instances)")
 
             conn.commit()
 
@@ -304,6 +305,7 @@ class StorageService:
                 LEFT JOIN instances i ON ser.series_instance_uid = i.series_instance_uid
                 WHERE ser.study_instance_uid = ?
                 GROUP BY ser.series_instance_uid
+                HAVING COUNT(DISTINCT i.id) > 0
                 ORDER BY ser.series_number ASC
             """, (study_uid,))
             series_rows = [dict(row) for row in cursor.fetchall()]
